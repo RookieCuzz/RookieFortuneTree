@@ -1,0 +1,21 @@
+name: RookieFortuneTree
+main: com.cuzz.rookiefortunetree.RookieFortuneTreePlugin
+version: 1.0.0
+api-version: "1.20"
+depend: [BukkitSpring, OdalitaMenus]
+softdepend: [PlayerPoints]
+commands:
+  wt:
+    description: Fortune tree commands
+    usage: /wt [gui|water|collect|reload|debug]
+  water:
+    description: Water the fortune tree
+    usage: /water
+    permission: dailywatertree.use
+permissions:
+  dailywatertree.gui:
+    default: true
+  dailywatertree.use:
+    default: true
+  dailywatertree.admin:
+    default: op

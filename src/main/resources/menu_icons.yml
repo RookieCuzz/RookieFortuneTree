@@ -1,0 +1,62 @@
+- IconID: BORDER
+  Material: GRAY_STAINED_GLASS_PANE
+  Name: "&7"
+  Lore: []
+
+- IconID: TREE
+  Material: OAK_SAPLING
+  Name: "&6元宝树 &7({levelName})"
+  Lore:
+    - "&7等级: &f{level}"
+    - "&7经验: &f{exp}&7/&f{expToNext}"
+    - "&7今日状态: &f{status}"
+    - "&7剩余次数: &f{remaining}&7/&f{dailyLimit}"
+    - "&7下次重置: &f{resetIn}"
+    - ""
+    - "&7本次定金: &6{deposit}"
+    - "&7本次上限: &6{rewardMax}"
+    - "&7免费次数: &f{free}"
+
+- IconID: WATER_READY
+  Material: WATER_BUCKET
+  Name: "&a浇水/摇树"
+  Lore:
+    - "&7定金: &6{deposit}"
+    - "&7点击开始"
+
+- IconID: WATER_DISABLED
+  Material: BUCKET
+  Name: "&c今日已浇水"
+  Lore:
+    - "&7下次重置: &f{resetIn}"
+
+- IconID: COLLECT_ALL
+  Material: HOPPER
+  Name: "&e一键收取"
+  Lore:
+    - "&7点击收取全部气泡"
+
+- IconID: RULES
+  Material: BOOK
+  Name: "&e玩法说明"
+  Lore:
+    - "&7首次: &6{firstPickCost} &7元宝，之后&6{freePicksAfterFirst}&7次免费"
+    - "&7每日仅可摘取&6{dailyLimit}&7次"
+
+- IconID: CLOSE
+  Material: BARRIER
+  Name: "&c关闭"
+  Lore: []
+
+- IconID: BUBBLE_NORMAL
+  Material: GOLD_NUGGET
+  Name: "&e元宝气泡"
+  Lore:
+    - "&7点击收取 &6{amount}"
+
+- IconID: BUBBLE_CRIT
+  Material: GOLD_BLOCK
+  Name: "&6暴击元宝"
+  Lore:
+    - "&7点击收取 &6{amount}"
+    - "&6暴击!"

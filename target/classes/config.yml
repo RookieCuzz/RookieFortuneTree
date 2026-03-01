@@ -1,0 +1,81 @@
+daily:
+  limit: 1
+  resetAt: "00:00"
+
+newbie:
+  firstPickCost: 100
+  freePicksAfterFirst: 9
+
+reroll:
+  enabled: true
+  maxTimesPerWater: 10
+  lockAfterFirstCollect: true
+
+bubbles:
+  min: 8
+  max: 12
+
+profit:
+  min: 1
+
+crit:
+  chance: 0.08
+  shareMin: 0.55
+  shareMax: 0.80
+
+levels:
+  - level: 1
+    name: "LV1"
+    deposit: 0
+    rewardMax: 240
+    expToNext: 100
+  - level: 2
+    name: "LV2"
+    deposit: 100
+    rewardMax: 264
+    expToNext: 200
+  - level: 3
+    name: "LV3"
+    deposit: 110
+    rewardMax: 312
+    expToNext: 400
+  - level: 4
+    name: "LV4"
+    deposit: 130
+    rewardMax: 360
+    expToNext: 700
+  - level: 5
+    name: "LV5"
+    deposit: 150
+    rewardMax: 480
+    expToNext: 1200
+  - level: 6
+    name: "LV6"
+    deposit: 200
+    rewardMax: 720
+    expToNext: 2000
+
+economy:
+  type: "playerpoints" # playerpoints | command | vault (vault fallback to command)
+  takeDepositCommand: "eco take {player} {deposit}"
+  giveRewardCommand: "eco give {player} {amount}"
+
+menu:
+  title: "&6元宝树"
+  open-sound: "UI_BUTTON_CLICK"
+  water-sound: "ITEM_BUCKET_EMPTY"
+  collect-sound: "ENTITY_EXPERIENCE_ORB_PICKUP"
+  fail-sound: "ENTITY_VILLAGER_NO"
+  bubble-slots: [10,11,12,13,14,15,16,19,20,21,23,24,25,28,29,30,32,33,34,37,38,39,41,42,43]
+  water-slot: 49
+  collect-all-slot: 51
+  rules-slot: 45
+  close-slot: 53
+
+messages:
+  waterDone: "&a浇水成功！树上长出了元宝气泡，快来收取吧～"
+  collectDone: "&a本次收获 &6{amount}&a 元宝（定金 &e{deposit}&a）"
+  noMoreTimes: "&c今日次数已用尽，请等待重置。"
+  alreadyPending: "&e你还有未收取的气泡，先把它们收完吧。"
+  invalidConfig: "&c配置错误：{reason}"
+  rerollHint: "&7未收取前退出再进入，可刷新结果（见好就收）"

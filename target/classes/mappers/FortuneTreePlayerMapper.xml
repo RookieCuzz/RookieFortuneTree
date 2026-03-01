@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.cuzz.rookiefortunetree.mapper.FortuneTreePlayerMapper">
+
+  <update id="createTableIfNotExists">
+    CREATE TABLE IF NOT EXISTS fortune_tree_player (
+      uuid VARCHAR(36) NOT NULL,
+      level INT NOT NULL DEFAULT 1,
+      exp INT NOT NULL DEFAULT 0,
+      free_picks INT NOT NULL DEFAULT 0,
+      first_done TINYINT(1) NOT NULL DEFAULT 0,
+      total_deposit BIGINT NOT NULL DEFAULT 0,
+      total_reward BIGINT NOT NULL DEFAULT 0,
+      crit_count BIGINT NOT NULL DEFAULT 0,
+      updated_at_millis BIGINT NOT NULL DEFAULT 0,
+      PRIMARY KEY (uuid)
+    )
+  </update>
+
+  <select id="selectByUuid" resultType="com.cuzz.rookiefortunetree.repository.model.FortuneTreePlayerRecord">
+    SELECT
+      uuid,
+      level,
+      exp,
+      free_picks AS freePicks,
+      first_done AS firstDone,
+      total_deposit AS totalDeposit,
+      total_reward AS totalReward,
+      crit_count AS critCount,
+      updated_at_millis AS updatedAtMillis
+    FROM fortune_tree_player
+    WHERE uuid = #{uuid}
+  </select>
+
+  <insert id="insert">
+    INSERT INTO fortune_tree_player (
+      uuid, level, exp, free_picks, first_done, total_deposit, total_reward, crit_count, updated_at_millis
+    ) VALUES (
+      #{uuid}, #{level}, #{exp}, #{freePicks}, #{firstDone}, #{totalDeposit}, #{totalReward}, #{critCount}, #{updatedAtMillis}
+    )
+  </insert>
+
+  <update id="update">
+    UPDATE fortune_tree_player
+    SET
+      level = #{level},
+      exp = #{exp},
+      free_picks = #{freePicks},
+      first_done = #{firstDone},
+      total_deposit = #{totalDeposit},
+      total_reward = #{totalReward},
+      crit_count = #{critCount},
+      updated_at_millis = #{updatedAtMillis}
+    WHERE uuid = #{uuid}
+  </update>
+
+</mapper>
+

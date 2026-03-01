@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.cuzz.rookiefortunetree.mapper.FortuneTreeAttemptMapper">
+
+  <update id="createTableIfNotExists">
+    CREATE TABLE IF NOT EXISTS fortune_tree_attempt (
+      uuid VARCHAR(36) NOT NULL,
+      cycle_id VARCHAR(16) NOT NULL,
+      status VARCHAR(16) NOT NULL,
+      used_count INT NOT NULL DEFAULT 0,
+      level INT NOT NULL DEFAULT 1,
+      deposit INT NOT NULL DEFAULT 0,
+      reward_max INT NOT NULL DEFAULT 0,
+      seed BIGINT NOT NULL DEFAULT 0,
+      bubble_count INT NOT NULL DEFAULT 0,
+      reroll_count INT NOT NULL DEFAULT 0,
+      created_at_millis BIGINT NOT NULL DEFAULT 0,
+      collect_bits TEXT,
+      updated_at_millis BIGINT NOT NULL DEFAULT 0,
+      PRIMARY KEY (uuid, cycle_id)
+    )
+  </update>
+
+  <select id="selectById" resultType="com.cuzz.rookiefortunetree.repository.model.FortuneTreeAttemptRecord">
+    SELECT
+      uuid,
+      cycle_id AS cycleId,
+      status,
+      used_count AS usedCount,
+      level,
+      deposit,
+      reward_max AS rewardMax,
+      seed,
+      bubble_count AS bubbleCount,
+      reroll_count AS rerollCount,
+      created_at_millis AS createdAtMillis,
+      collect_bits AS collectBits,
+      updated_at_millis AS updatedAtMillis
+    FROM fortune_tree_attempt
+    WHERE uuid = #{uuid} AND cycle_id = #{cycleId}
+  </select>
+
+  <insert id="insert">
+    INSERT INTO fortune_tree_attempt (
+      uuid, cycle_id, status, used_count, level, deposit, reward_max, seed, bubble_count, reroll_count,
+      created_at_millis, collect_bits, updated_at_millis
+    ) VALUES (
+      #{uuid}, #{cycleId}, #{status}, #{usedCount}, #{level}, #{deposit}, #{rewardMax}, #{seed}, #{bubbleCount}, #{rerollCount},
+      #{createdAtMillis}, #{collectBits}, #{updatedAtMillis}
+    )
+  </insert>
+
+  <update id="update">
+    UPDATE fortune_tree_attempt
+    SET
+      status = #{status},
+      used_count = #{usedCount},
+      level = #{level},
+      deposit = #{deposit},
+      reward_max = #{rewardMax},
+      seed = #{seed},
+      bubble_count = #{bubbleCount},
+      reroll_count = #{rerollCount},
+      created_at_millis = #{createdAtMillis},
+      collect_bits = #{collectBits},
+      updated_at_millis = #{updatedAtMillis}
+    WHERE uuid = #{uuid} AND cycle_id = #{cycleId}
+  </update>
+
+</mapper>
+
