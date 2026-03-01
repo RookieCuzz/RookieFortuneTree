@@ -173,5 +173,4 @@ Covered areas:
 ## Known Limitations
 
 - `economy.type=vault` is not implemented in this example and falls back to `command`.
-- `reroll.lockAfterFirstCollect` is currently parsed from config but not enforced in logic.
 - If localized text looks corrupted, make sure `config.yml` and `menu_icons.yml` are saved as UTF-8.

@@ -3,11 +3,14 @@ package com.cuzz.rookiefortunetree.config;
 import com.cuzz.bukkitspring.api.annotation.Autowired;
 import com.cuzz.bukkitspring.api.annotation.Component;
 import com.cuzz.bukkitspring.api.annotation.PostConstruct;
+import com.cuzz.starter.bukkitspring.config.api.ConfigQuery;
+import com.cuzz.starter.bukkitspring.config.api.ConfigService;
 import com.cuzz.rookiefortunetree.model.EconomyType;
 import com.cuzz.rookiefortunetree.model.LevelConfig;
 import org.bukkit.Sound;
 import org.bukkit.configuration.file.YamlConfiguration;
 
+import java.io.StringReader;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -15,18 +18,27 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 @Component
 public final class FortuneTreeConfig {
     private static final String CONFIG_FILE = "config.yml";
+    private static final String PLUGIN_NAME = "RookieFortuneTree";
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
 
     private final ConfigurationManager configurationManager;
+    private final Logger logger;
+    private final ConfigService configService;
     private volatile Data data;
 
     @Autowired
-    public FortuneTreeConfig(ConfigurationManager configurationManager) {
+    public FortuneTreeConfig(ConfigurationManager configurationManager,
+                             Logger logger,
+                             @Autowired(required = false) ConfigService configService) {
         this.configurationManager = configurationManager;
+        this.logger = logger;
+        this.configService = configService;
     }
 
     @PostConstruct
@@ -35,8 +47,25 @@ public final class FortuneTreeConfig {
     }
 
     public synchronized void reload() {
-        YamlConfiguration config = configurationManager.reloadConfig(CONFIG_FILE);
+        YamlConfiguration config = loadYamlConfig();
         data = parse(config);
+    }
+
+    private YamlConfiguration loadYamlConfig() {
+        if (configService != null && configService.isEnabled()) {
+            try {
+                configService.invalidate(CONFIG_FILE);
+                return configService.load(
+                        ConfigQuery.builder(CONFIG_FILE).plugin(PLUGIN_NAME).build(),
+                        document -> YamlConfiguration.loadConfiguration(new StringReader(document.content()))
+                );
+            } catch (RuntimeException ex) {
+                logger.log(Level.WARNING,
+                        "[FortuneTree] Failed to load " + CONFIG_FILE + " via ConfigService, fallback to local file.",
+                        ex);
+            }
+        }
+        return configurationManager.reloadConfig(CONFIG_FILE);
     }
 
     public int dailyLimit() {

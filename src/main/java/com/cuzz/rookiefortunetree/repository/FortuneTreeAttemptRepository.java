@@ -76,7 +76,8 @@ public final class FortuneTreeAttemptRepository {
                 mapper.update(record);
             }
         } catch (Exception ex) {
-            logger.log(Level.WARNING, "[FortuneTree] Failed to upsert attempt record.", ex);
+            logger.log(Level.SEVERE, "[FortuneTree] Failed to upsert attempt record.", ex);
+            throw new IllegalStateException("Failed to upsert attempt record.", ex);
         }
     }
 
@@ -127,4 +128,3 @@ public final class FortuneTreeAttemptRepository {
         }
     }
 }
-

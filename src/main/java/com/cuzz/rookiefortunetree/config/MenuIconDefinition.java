@@ -1,4 +1,4 @@
-package com.cuzz.rookiefortunetree.menu.icon;
+package com.cuzz.rookiefortunetree.config;
 
 import java.util.List;
 
@@ -9,4 +9,3 @@ public record MenuIconDefinition(
         List<String> lore
 ) {
 }
-

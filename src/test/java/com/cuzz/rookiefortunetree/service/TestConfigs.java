@@ -5,6 +5,7 @@ import com.cuzz.rookiefortunetree.config.ConfigurationManager;
 import com.cuzz.rookiefortunetree.config.FortuneTreeConfig;
 import org.bukkit.configuration.file.YamlConfiguration;
 
+import java.util.logging.Logger;
 import java.util.function.Consumer;
 
 final class TestConfigs {
@@ -32,9 +33,12 @@ final class TestConfigs {
                 return true;
             }
         };
-        FortuneTreeConfig config = new FortuneTreeConfig(new ConfigurationManager(loader));
+        FortuneTreeConfig config = new FortuneTreeConfig(
+                new ConfigurationManager(loader),
+                Logger.getLogger("Test"),
+                null
+        );
         config.reload();
         return config;
     }
 }
-

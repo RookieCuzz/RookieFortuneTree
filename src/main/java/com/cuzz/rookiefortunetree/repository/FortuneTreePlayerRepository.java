@@ -69,7 +69,8 @@ public final class FortuneTreePlayerRepository {
                 mapper.update(record);
             }
         } catch (Exception ex) {
-            logger.log(Level.WARNING, "[FortuneTree] Failed to upsert player record.", ex);
+            logger.log(Level.SEVERE, "[FortuneTree] Failed to upsert player record.", ex);
+            throw new IllegalStateException("Failed to upsert player record.", ex);
         }
     }
 
@@ -98,4 +99,3 @@ public final class FortuneTreePlayerRepository {
         return record;
     }
 }
-

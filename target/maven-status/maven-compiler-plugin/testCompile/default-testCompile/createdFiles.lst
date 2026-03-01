@@ -1,4 +1,5 @@
 com\cuzz\rookiefortunetree\storage\PersistentFortuneTreeStoreTest.class
+com\cuzz\rookiefortunetree\repository\RepositoryFailurePropagationTest.class
 com\cuzz\rookiefortunetree\service\FortuneTreeServiceExpGainTest.class
 com\cuzz\rookiefortunetree\service\RewardGeneratorTest.class
 com\cuzz\rookiefortunetree\service\ResetClockServiceTest.class

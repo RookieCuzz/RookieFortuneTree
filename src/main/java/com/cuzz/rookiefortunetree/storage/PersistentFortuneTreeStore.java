@@ -3,6 +3,7 @@ package com.cuzz.rookiefortunetree.storage;
 import com.cuzz.bukkitspring.api.annotation.Autowired;
 import com.cuzz.bukkitspring.api.annotation.Component;
 import com.cuzz.bukkitspring.api.annotation.PostConstruct;
+import com.cuzz.bukkitspring.api.annotation.PreDestroy;
 import com.cuzz.rookiefortunetree.model.AttemptState;
 import com.cuzz.rookiefortunetree.model.AttemptStatus;
 import com.cuzz.rookiefortunetree.model.PlayerState;
@@ -12,12 +13,24 @@ import com.cuzz.starter.bukkitspring.caffeine.api.CaffeineService;
 import com.cuzz.starter.bukkitspring.redis.api.RedisService;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import org.bukkit.Bukkit;
+import org.bukkit.plugin.Plugin;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.BitSet;
+import java.util.Deque;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -32,6 +45,9 @@ public final class PersistentFortuneTreeStore implements FortuneTreeStore {
     private static final String REDIS_HEALTH_KEY = "ft:health";
     private static final String PLAYER_JVM_CACHE_NAME = "rookie-ft-player-state";
     private static final String ATTEMPT_JVM_CACHE_NAME = "rookie-ft-attempt-state";
+    private static final String PLUGIN_NAME = "RookieFortuneTree";
+    private static final long PERSISTENCE_FAILURE_WINDOW_MILLIS = 60_000L;
+    private static final int PERSISTENCE_FAILURE_THRESHOLD = 25;
 
     private final Logger logger;
     private final RedisService redis;
@@ -40,9 +56,16 @@ public final class PersistentFortuneTreeStore implements FortuneTreeStore {
     private final FortuneTreeAttemptRepository attemptRepository;
     private final Cache<UUID, PlayerState> playerCache;
     private final Cache<UUID, AttemptState> attemptCache;
+    private final Object persistenceExecutorLock = new Object();
+    private final Deque<Long> persistenceFailureTimes = new LinkedList<>();
+    private final AtomicInteger persistenceThreadCounter = new AtomicInteger(1);
+    private final AtomicBoolean persistenceCircuitOpen = new AtomicBoolean(false);
+    private final AtomicBoolean disableScheduled = new AtomicBoolean(false);
     private volatile boolean redisTemporarilyDisabled;
     private volatile long redisRetryAfterMillis;
     private volatile long redisLastWarnAtMillis;
+    private volatile long persistenceCircuitWarnAtMillis;
+    private volatile ExecutorService persistenceExecutor;
 
     @Autowired
     public PersistentFortuneTreeStore(Logger logger,
@@ -67,6 +90,24 @@ public final class PersistentFortuneTreeStore implements FortuneTreeStore {
         logger.info("[FortuneTree] JVM cache: strategy=expire-after-access-ms"
                 + ", ttlMs=" + JVM_CACHE_EXPIRE_AFTER_ACCESS_MILLIS
                 + ", provider=" + (isCaffeineReady() ? "caffeine-starter" : "local-caffeine"));
+        logger.info("[FortuneTree] Async persistence: enabled=true, failureThreshold="
+                + PERSISTENCE_FAILURE_THRESHOLD + ", windowMs=" + PERSISTENCE_FAILURE_WINDOW_MILLIS);
+    }
+
+    @PreDestroy
+    public void shutdown() {
+        ExecutorService executor = persistenceExecutor;
+        if (executor != null) {
+            executor.shutdown();
+            try {
+                if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+                    executor.shutdownNow();
+                }
+            } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+                executor.shutdownNow();
+            }
+        }
     }
 
     @Override
@@ -102,13 +143,11 @@ public final class PersistentFortuneTreeStore implements FortuneTreeStore {
         if (state == null || state.getUuid() == null) {
             return;
         }
-        playerCache.put(state.getUuid(), state);
-        if (playerRepository != null && playerRepository.isAvailable()) {
-            playerRepository.upsert(state);
-        }
-        if (isRedisEnabled()) {
-            savePlayerToRedis(state, playerName);
-        }
+        PlayerState snapshot = copyPlayerState(state);
+        String normalizedPlayerName = safePlayerName(playerName);
+        playerCache.put(snapshot.getUuid(), snapshot);
+        submitPersistenceTask("savePlayer", snapshot.getUuid(), null,
+                () -> persistPlayerSnapshot(snapshot, normalizedPlayerName));
     }
 
     @Override
@@ -116,13 +155,10 @@ public final class PersistentFortuneTreeStore implements FortuneTreeStore {
         if (attempt == null || attempt.getUuid() == null) {
             return;
         }
-        attemptCache.put(attempt.getUuid(), attempt);
-        if (attemptRepository != null && attemptRepository.isAvailable()) {
-            attemptRepository.upsert(attempt);
-        }
-        if (isRedisEnabled()) {
-            saveAttemptToRedis(attempt);
-        }
+        AttemptState snapshot = copyAttemptState(attempt);
+        attemptCache.put(snapshot.getUuid(), snapshot);
+        submitPersistenceTask("saveAttempt", snapshot.getUuid(), safeCycleId(snapshot.getCycleId()),
+                () -> persistAttemptSnapshot(snapshot));
     }
 
     @Override
@@ -133,24 +169,15 @@ public final class PersistentFortuneTreeStore implements FortuneTreeStore {
         if (index < 0 || index >= attempt.getBubbleCount()) {
             return false;
         }
-        if (!isRedisEnabled()) {
-            return attempt.markCollected(index);
+        boolean marked = attempt.markCollected(index);
+        if (!marked || attempt.getUuid() == null) {
+            return marked;
         }
-        String cycleId = safeCycleId(attempt.getCycleId());
-        String key = collectKey(attempt.getUuid(), cycleId);
-        try {
-            boolean old = redis.setBit(key, index, true);
-            redis.expire(key, ATTEMPT_TTL_SECONDS);
-            if (!old) {
-                attempt.markCollected(index);
-                return true;
-            }
-            attempt.markCollected(index);
-            return false;
-        } catch (Exception ex) {
-            onRedisFailure("markCollected", ex);
-            return attempt.markCollected(index);
-        }
+        AttemptState snapshot = copyAttemptState(attempt);
+        attemptCache.put(snapshot.getUuid(), snapshot);
+        submitPersistenceTask("markCollected", snapshot.getUuid(), safeCycleId(snapshot.getCycleId()),
+                () -> persistAttemptSnapshot(snapshot));
+        return true;
     }
 
     @Override
@@ -159,20 +186,13 @@ public final class PersistentFortuneTreeStore implements FortuneTreeStore {
             return;
         }
         attempt.markAllCollected();
-        if (!isRedisEnabled()) {
+        if (attempt.getUuid() == null) {
             return;
         }
-        String cycleId = safeCycleId(attempt.getCycleId());
-        String key = collectKey(attempt.getUuid(), cycleId);
-        try {
-            int count = Math.max(0, attempt.getBubbleCount());
-            for (int i = 0; i < count; i++) {
-                redis.setBit(key, i, true);
-            }
-            redis.expire(key, ATTEMPT_TTL_SECONDS);
-        } catch (Exception ex) {
-            onRedisFailure("markAllCollected", ex);
-        }
+        AttemptState snapshot = copyAttemptState(attempt);
+        attemptCache.put(snapshot.getUuid(), snapshot);
+        submitPersistenceTask("markAllCollected", snapshot.getUuid(), safeCycleId(snapshot.getCycleId()),
+                () -> persistAttemptSnapshot(snapshot));
     }
 
     @Override
@@ -185,12 +205,10 @@ public final class PersistentFortuneTreeStore implements FortuneTreeStore {
     }
 
     private PlayerState loadPlayer(UUID uuid) {
-        PlayerState state = null;
-        if (isRedisEnabled()) {
-            state = loadPlayerFromRedis(uuid);
-        }
-        if (state == null && playerRepository != null && playerRepository.isAvailable()) {
-            state = playerRepository.find(uuid);
+        // Read path: Redis -> MyBatis -> memory default.
+        PlayerState state = isRedisEnabled() ? loadPlayerFromRedis(uuid) : null;
+        if (state == null) {
+            state = loadPlayerFromMyBatis(uuid);
         }
         if (state == null) {
             state = new PlayerState(uuid);
@@ -199,17 +217,59 @@ public final class PersistentFortuneTreeStore implements FortuneTreeStore {
     }
 
     private AttemptState loadAttempt(UUID uuid, String cycleId) {
-        AttemptState attempt = null;
-        if (isRedisEnabled()) {
-            attempt = loadAttemptFromRedis(uuid, cycleId);
-        }
-        if (attempt == null && attemptRepository != null && attemptRepository.isAvailable()) {
-            attempt = attemptRepository.find(uuid, cycleId);
+        // Read path: Redis -> MyBatis -> memory default.
+        AttemptState attempt = isRedisEnabled() ? loadAttemptFromRedis(uuid, cycleId) : null;
+        if (attempt == null) {
+            attempt = loadAttemptFromMyBatis(uuid, cycleId);
         }
         if (attempt == null) {
             attempt = new AttemptState(uuid, cycleId);
         }
         return attempt;
+    }
+
+    private PlayerState loadPlayerFromMyBatis(UUID uuid) {
+        if (playerRepository == null || !playerRepository.isAvailable()) {
+            return null;
+        }
+        PlayerState state = playerRepository.find(uuid);
+        if (state != null) {
+            warmPlayerToRedis(state);
+        }
+        return state;
+    }
+
+    private AttemptState loadAttemptFromMyBatis(UUID uuid, String cycleId) {
+        if (attemptRepository == null || !attemptRepository.isAvailable()) {
+            return null;
+        }
+        AttemptState attempt = attemptRepository.find(uuid, cycleId);
+        if (attempt != null) {
+            warmAttemptToRedis(attempt);
+        }
+        return attempt;
+    }
+
+    private void warmPlayerToRedis(PlayerState state) {
+        if (state == null || !isRedisEnabled()) {
+            return;
+        }
+        try {
+            savePlayerToRedis(state, null);
+        } catch (Exception ex) {
+            onRedisFailure("warmPlayerCacheFromMyBatis", ex);
+        }
+    }
+
+    private void warmAttemptToRedis(AttemptState attempt) {
+        if (attempt == null || !isRedisEnabled()) {
+            return;
+        }
+        try {
+            saveAttemptToRedis(attempt);
+        } catch (Exception ex) {
+            onRedisFailure("warmAttemptCacheFromMyBatis", ex);
+        }
     }
 
     private PlayerState loadPlayerFromRedis(UUID uuid) {
@@ -277,23 +337,19 @@ public final class PersistentFortuneTreeStore implements FortuneTreeStore {
         if (state == null || state.getUuid() == null) {
             return;
         }
-        try {
-            Map<String, String> map = new HashMap<>();
-            String normalizedPlayerName = safePlayerName(playerName);
-            if (!normalizedPlayerName.isEmpty()) {
-                map.put("name", normalizedPlayerName);
-            }
-            map.put("level", String.valueOf(state.getLevel()));
-            map.put("exp", String.valueOf(state.getExp()));
-            map.put("free", String.valueOf(state.getFreePicks()));
-            map.put("firstDone", state.isFirstDone() ? "1" : "0");
-            map.put("totalDeposit", String.valueOf(state.getTotalDeposit()));
-            map.put("totalReward", String.valueOf(state.getTotalReward()));
-            map.put("critCount", String.valueOf(state.getCritCount()));
-            redis.hset(playerKey(state.getUuid()), map);
-        } catch (Exception ex) {
-            onRedisFailure("savePlayer", ex);
+        Map<String, String> map = new HashMap<>();
+        String normalizedPlayerName = safePlayerName(playerName);
+        if (!normalizedPlayerName.isEmpty()) {
+            map.put("name", normalizedPlayerName);
         }
+        map.put("level", String.valueOf(state.getLevel()));
+        map.put("exp", String.valueOf(state.getExp()));
+        map.put("free", String.valueOf(state.getFreePicks()));
+        map.put("firstDone", state.isFirstDone() ? "1" : "0");
+        map.put("totalDeposit", String.valueOf(state.getTotalDeposit()));
+        map.put("totalReward", String.valueOf(state.getTotalReward()));
+        map.put("critCount", String.valueOf(state.getCritCount()));
+        redis.hset(playerKey(state.getUuid()), map);
     }
 
     private void saveAttemptToRedis(AttemptState attempt) {
@@ -305,29 +361,28 @@ public final class PersistentFortuneTreeStore implements FortuneTreeStore {
             return;
         }
         String key = attemptKey(attempt.getUuid(), cycleId);
-        try {
-            Map<String, String> map = new HashMap<>();
-            map.put("cycleId", cycleId);
-            map.put("usedCount", String.valueOf(attempt.getUsedCount()));
-            map.put("status", attempt.getStatus() == null ? AttemptStatus.IDLE.name() : attempt.getStatus().name());
-            map.put("level", String.valueOf(attempt.getLevel()));
-            map.put("deposit", String.valueOf(attempt.getDeposit()));
-            map.put("rewardMax", String.valueOf(attempt.getRewardMax()));
-            map.put("seed", String.valueOf(attempt.getSeed()));
-            map.put("bubbleCount", String.valueOf(attempt.getBubbleCount()));
-            map.put("rerollCount", String.valueOf(attempt.getRerollCount()));
-            map.put("createdAt", String.valueOf(attempt.getCreatedAtMillis()));
-            redis.hset(key, map);
-            redis.expire(key, ATTEMPT_TTL_SECONDS);
+        Map<String, String> map = new HashMap<>();
+        map.put("cycleId", cycleId);
+        map.put("usedCount", String.valueOf(attempt.getUsedCount()));
+        map.put("status", attempt.getStatus() == null ? AttemptStatus.IDLE.name() : attempt.getStatus().name());
+        map.put("level", String.valueOf(attempt.getLevel()));
+        map.put("deposit", String.valueOf(attempt.getDeposit()));
+        map.put("rewardMax", String.valueOf(attempt.getRewardMax()));
+        map.put("seed", String.valueOf(attempt.getSeed()));
+        map.put("bubbleCount", String.valueOf(attempt.getBubbleCount()));
+        map.put("rerollCount", String.valueOf(attempt.getRerollCount()));
+        map.put("createdAt", String.valueOf(attempt.getCreatedAtMillis()));
+        redis.hset(key, map);
+        redis.expire(key, ATTEMPT_TTL_SECONDS);
 
-            String collectKey = collectKey(attempt.getUuid(), cycleId);
-            if (attempt.collectedCount() <= 0) {
-                redis.del(collectKey);
-            } else {
-                redis.expire(collectKey, ATTEMPT_TTL_SECONDS);
-            }
-        } catch (Exception ex) {
-            onRedisFailure("saveAttempt", ex);
+        String collectKey = collectKey(attempt.getUuid(), cycleId);
+        redis.del(collectKey);
+        BitSet collected = attempt.snapshotCollected();
+        for (int i = collected.nextSetBit(0); i >= 0; i = collected.nextSetBit(i + 1)) {
+            redis.setBit(collectKey, i, true);
+        }
+        if (!collected.isEmpty()) {
+            redis.expire(collectKey, ATTEMPT_TTL_SECONDS);
         }
     }
 
@@ -387,6 +442,200 @@ public final class PersistentFortuneTreeStore implements FortuneTreeStore {
             return "";
         }
         return playerName.trim();
+    }
+
+    private void persistPlayerSnapshot(PlayerState snapshot, String playerName) {
+        Exception failure = null;
+        if (playerRepository != null && playerRepository.isAvailable()) {
+            try {
+                playerRepository.upsert(snapshot);
+            } catch (Exception ex) {
+                failure = mergeFailure(failure, ex);
+            }
+        }
+        if (isRedisEnabled()) {
+            try {
+                savePlayerToRedis(snapshot, playerName);
+            } catch (Exception ex) {
+                onRedisFailure("asyncSavePlayer", ex);
+                failure = mergeFailure(failure, ex);
+            }
+        }
+        if (failure != null) {
+            throw new IllegalStateException("player persistence failed", failure);
+        }
+    }
+
+    private void persistAttemptSnapshot(AttemptState snapshot) {
+        Exception failure = null;
+        if (attemptRepository != null && attemptRepository.isAvailable()) {
+            try {
+                attemptRepository.upsert(snapshot);
+            } catch (Exception ex) {
+                failure = mergeFailure(failure, ex);
+            }
+        }
+        if (isRedisEnabled()) {
+            try {
+                saveAttemptToRedis(snapshot);
+            } catch (Exception ex) {
+                onRedisFailure("asyncSaveAttempt", ex);
+                failure = mergeFailure(failure, ex);
+            }
+        }
+        if (failure != null) {
+            throw new IllegalStateException("attempt persistence failed", failure);
+        }
+    }
+
+    private Exception mergeFailure(Exception existing, Exception incoming) {
+        if (incoming == null) {
+            return existing;
+        }
+        if (existing == null) {
+            return incoming;
+        }
+        existing.addSuppressed(incoming);
+        return existing;
+    }
+
+    private void submitPersistenceTask(String operation, UUID uuid, String cycleId, Runnable action) {
+        if (action == null) {
+            return;
+        }
+        if (persistenceCircuitOpen.get()) {
+            long now = System.currentTimeMillis();
+            if (now - persistenceCircuitWarnAtMillis > 10_000L) {
+                persistenceCircuitWarnAtMillis = now;
+                logger.severe("[FortuneTree] Persistence circuit is open, skip operation=" + operation
+                        + ", uuid=" + uuid + ", cycle=" + safeCycleId(cycleId));
+            }
+            return;
+        }
+
+        ExecutorService executor = resolvePersistenceExecutor();
+        if (executor == null) {
+            runPersistenceTask(operation, uuid, cycleId, action);
+            return;
+        }
+
+        executor.execute(() -> runPersistenceTask(operation, uuid, cycleId, action));
+    }
+
+    private void runPersistenceTask(String operation, UUID uuid, String cycleId, Runnable action) {
+        try {
+            action.run();
+        } catch (Exception ex) {
+            onPersistenceFailure(operation, uuid, cycleId, ex);
+        }
+    }
+
+    private ExecutorService resolvePersistenceExecutor() {
+        if (!isBukkitRuntimeReady()) {
+            return null;
+        }
+        ExecutorService existing = persistenceExecutor;
+        if (existing != null) {
+            return existing;
+        }
+        synchronized (persistenceExecutorLock) {
+            if (persistenceExecutor == null) {
+                persistenceExecutor = Executors.newSingleThreadExecutor(new ThreadFactory() {
+                    @Override
+                    public Thread newThread(Runnable runnable) {
+                        Thread thread = new Thread(runnable,
+                                "rookie-ft-persistence-" + persistenceThreadCounter.getAndIncrement());
+                        thread.setDaemon(true);
+                        return thread;
+                    }
+                });
+            }
+            return persistenceExecutor;
+        }
+    }
+
+    private boolean isBukkitRuntimeReady() {
+        try {
+            return Bukkit.getServer() != null;
+        } catch (Exception ex) {
+            return false;
+        }
+    }
+
+    private void onPersistenceFailure(String operation, UUID uuid, String cycleId, Exception ex) {
+        logger.log(Level.SEVERE,
+                "[FortuneTree] Async persistence failed. operation=" + operation
+                        + ", uuid=" + uuid
+                        + ", cycle=" + safeCycleId(cycleId),
+                ex);
+        long now = System.currentTimeMillis();
+        int failuresInWindow;
+        synchronized (persistenceFailureTimes) {
+            persistenceFailureTimes.addLast(now);
+            while (!persistenceFailureTimes.isEmpty()
+                    && now - persistenceFailureTimes.peekFirst() > PERSISTENCE_FAILURE_WINDOW_MILLIS) {
+                persistenceFailureTimes.removeFirst();
+            }
+            failuresInWindow = persistenceFailureTimes.size();
+        }
+        if (failuresInWindow < PERSISTENCE_FAILURE_THRESHOLD) {
+            return;
+        }
+        if (!persistenceCircuitOpen.compareAndSet(false, true)) {
+            return;
+        }
+        logger.severe("[FortuneTree] Persistence failures reached threshold ("
+                + failuresInWindow + " failures in " + PERSISTENCE_FAILURE_WINDOW_MILLIS
+                + "ms). Disabling plugin for data safety.");
+        disablePluginSafely();
+    }
+
+    private void disablePluginSafely() {
+        if (!disableScheduled.compareAndSet(false, true)) {
+            return;
+        }
+        Plugin plugin = Bukkit.getPluginManager().getPlugin(PLUGIN_NAME);
+        if (plugin == null) {
+            logger.severe("[FortuneTree] Cannot disable plugin automatically: plugin instance not found.");
+            return;
+        }
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            if (!plugin.isEnabled()) {
+                return;
+            }
+            logger.severe("[FortuneTree] Disabling plugin due to persistent storage failures.");
+            Bukkit.getPluginManager().disablePlugin(plugin);
+        });
+    }
+
+    private PlayerState copyPlayerState(PlayerState source) {
+        PlayerState copy = new PlayerState(source.getUuid());
+        copy.setLevel(source.getLevel());
+        copy.setExp(source.getExp());
+        copy.setFreePicks(source.getFreePicks());
+        copy.setFirstDone(source.isFirstDone());
+        copy.addTotalDeposit(source.getTotalDeposit());
+        copy.addTotalReward(source.getTotalReward());
+        copy.addCritCount(source.getCritCount());
+        return copy;
+    }
+
+    private AttemptState copyAttemptState(AttemptState source) {
+        AttemptState copy = new AttemptState(source.getUuid(), safeCycleId(source.getCycleId()));
+        copy.setUsedCount(source.getUsedCount());
+        copy.setStatus(source.getStatus());
+        copy.setLevel(source.getLevel());
+        copy.setDeposit(source.getDeposit());
+        copy.setRewardMax(source.getRewardMax());
+        copy.setSeed(source.getSeed());
+        copy.setBubbleCount(source.getBubbleCount());
+        copy.setRerollCount(source.getRerollCount());
+        copy.setCreatedAtMillis(source.getCreatedAtMillis());
+        BitSet collected = source.snapshotCollected();
+        for (int i = collected.nextSetBit(0); i >= 0 && i < copy.getBubbleCount(); i = collected.nextSetBit(i + 1)) {
+            copy.markCollected(i);
+        }
+        return copy;
     }
 
     private String playerKey(UUID uuid) {

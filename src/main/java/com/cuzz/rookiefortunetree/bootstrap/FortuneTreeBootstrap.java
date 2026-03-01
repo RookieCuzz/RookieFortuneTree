@@ -33,7 +33,12 @@ public final class FortuneTreeBootstrap {
 
     @PostConstruct
     public void register() {
-        schemaInitializer.initialize();
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            long startMillis = System.currentTimeMillis();
+            schemaInitializer.initialize();
+            plugin.getLogger().info("[FortuneTree] Schema initialization completed in "
+                    + (System.currentTimeMillis() - startMillis) + "ms");
+        });
         plugin.getLogger().info("[FortuneTree] Store=" + store.getClass().getSimpleName());
         PluginCommand wt = plugin.getCommand("wt");
         if (wt != null) {

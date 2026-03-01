@@ -35,9 +35,9 @@ public final class CommandEconomyGateway {
         return dispatch(command);
     }
 
-    public void give(Player player, int amount, String reason) {
+    public boolean give(Player player, int amount, String reason) {
         if (player == null || amount <= 0) {
-            return;
+            return amount <= 0;
         }
         String command = TextUtil.format(config.giveRewardCommand(), Map.of(
                 "player", player.getName(),
@@ -45,7 +45,7 @@ public final class CommandEconomyGateway {
                 "amount", String.valueOf(amount),
                 "reason", reason == null ? "" : reason
         ));
-        dispatch(command);
+        return dispatch(command);
     }
 
     private boolean dispatch(String command) {

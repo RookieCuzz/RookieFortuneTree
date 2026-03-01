@@ -17,13 +17,12 @@ C:\Users\Administrator\Desktop\monsterController\BukkitSpring\examples\RookieFor
 C:\Users\Administrator\Desktop\monsterController\BukkitSpring\examples\RookieFortuneTree\src\main\java\com\cuzz\rookiefortunetree\storage\PersistentFortuneTreeStore.java
 C:\Users\Administrator\Desktop\monsterController\BukkitSpring\examples\RookieFortuneTree\src\main\java\com\cuzz\rookiefortunetree\config\ConfigurationManager.java
 C:\Users\Administrator\Desktop\monsterController\BukkitSpring\examples\RookieFortuneTree\src\main\java\com\cuzz\rookiefortunetree\menu\MenuItemBuilder.java
-C:\Users\Administrator\Desktop\monsterController\BukkitSpring\examples\RookieFortuneTree\src\main\java\com\cuzz\rookiefortunetree\menu\icon\MenuIconDefinition.java
 C:\Users\Administrator\Desktop\monsterController\BukkitSpring\examples\RookieFortuneTree\src\main\java\com\cuzz\rookiefortunetree\service\economy\CommandEconomyGateway.java
+C:\Users\Administrator\Desktop\monsterController\BukkitSpring\examples\RookieFortuneTree\src\main\java\com\cuzz\rookiefortunetree\config\MenuIconConfig.java
 C:\Users\Administrator\Desktop\monsterController\BukkitSpring\examples\RookieFortuneTree\src\main\java\com\cuzz\rookiefortunetree\model\EconomyType.java
 C:\Users\Administrator\Desktop\monsterController\BukkitSpring\examples\RookieFortuneTree\src\main\java\com\cuzz\rookiefortunetree\service\economy\PlayerPointsEconomyGateway.java
 C:\Users\Administrator\Desktop\monsterController\BukkitSpring\examples\RookieFortuneTree\src\main\java\com\cuzz\rookiefortunetree\event\FortuneTreeRequestEvent.java
 C:\Users\Administrator\Desktop\monsterController\BukkitSpring\examples\RookieFortuneTree\src\main\java\com\cuzz\rookiefortunetree\service\GenerationResult.java
-C:\Users\Administrator\Desktop\monsterController\BukkitSpring\examples\RookieFortuneTree\src\main\java\com\cuzz\rookiefortunetree\menu\icon\MenuIconConfig.java
 C:\Users\Administrator\Desktop\monsterController\BukkitSpring\examples\RookieFortuneTree\src\main\java\com\cuzz\rookiefortunetree\config\ConfigurationLoader.java
 C:\Users\Administrator\Desktop\monsterController\BukkitSpring\examples\RookieFortuneTree\src\main\java\com\cuzz\rookiefortunetree\util\TextUtil.java
 C:\Users\Administrator\Desktop\monsterController\BukkitSpring\examples\RookieFortuneTree\src\main\java\com\cuzz\rookiefortunetree\repository\model\FortuneTreePlayerRecord.java
@@ -38,6 +37,7 @@ C:\Users\Administrator\Desktop\monsterController\BukkitSpring\examples\RookieFor
 C:\Users\Administrator\Desktop\monsterController\BukkitSpring\examples\RookieFortuneTree\src\main\java\com\cuzz\rookiefortunetree\storage\FortuneTreeStore.java
 C:\Users\Administrator\Desktop\monsterController\BukkitSpring\examples\RookieFortuneTree\src\main\java\com\cuzz\rookiefortunetree\model\AttemptStatus.java
 C:\Users\Administrator\Desktop\monsterController\BukkitSpring\examples\RookieFortuneTree\src\main\java\com\cuzz\rookiefortunetree\storage\MemoryFortuneTreeStore.java
+C:\Users\Administrator\Desktop\monsterController\BukkitSpring\examples\RookieFortuneTree\src\main\java\com\cuzz\rookiefortunetree\config\MenuIconDefinition.java
 C:\Users\Administrator\Desktop\monsterController\BukkitSpring\examples\RookieFortuneTree\src\main\java\com\cuzz\rookiefortunetree\model\AttemptState.java
 C:\Users\Administrator\Desktop\monsterController\BukkitSpring\examples\RookieFortuneTree\src\main\java\com\cuzz\rookiefortunetree\model\PlayerState.java
 C:\Users\Administrator\Desktop\monsterController\BukkitSpring\examples\RookieFortuneTree\src\main\java\com\cuzz\rookiefortunetree\repository\model\FortuneTreeAttemptRecord.java

@@ -137,6 +137,17 @@ public final class AttemptState {
         return true;
     }
 
+    public boolean unmarkCollected(int index) {
+        if (index < 0 || index >= bubbleCount) {
+            return false;
+        }
+        if (!collected.get(index)) {
+            return false;
+        }
+        collected.clear(index);
+        return true;
+    }
+
     public void markAllCollected() {
         if (bubbleCount <= 0) {
             return;

@@ -7,7 +7,7 @@ softdepend: [PlayerPoints]
 commands:
   wt:
     description: Fortune tree commands
-    usage: /wt [gui|water|collect|reload|debug]
+    usage: /wt [gui|water|collect|reload|debug|timeoffset <deltaHours>|timeoffset set <hours>]
   water:
     description: Water the fortune tree
     usage: /water

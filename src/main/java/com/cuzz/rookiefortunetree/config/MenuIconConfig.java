@@ -1,8 +1,11 @@
-package com.cuzz.rookiefortunetree.menu.icon;
+package com.cuzz.rookiefortunetree.config;
 
 import com.cuzz.bukkitspring.api.annotation.Autowired;
 import com.cuzz.bukkitspring.api.annotation.Component;
 import com.cuzz.bukkitspring.api.annotation.PostConstruct;
+import com.cuzz.starter.bukkitspring.config.api.ConfigDocument;
+import com.cuzz.starter.bukkitspring.config.api.ConfigQuery;
+import com.cuzz.starter.bukkitspring.config.api.ConfigService;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.yaml.snakeyaml.Yaml;
 
@@ -25,12 +28,16 @@ public final class MenuIconConfig {
 
     private final JavaPlugin plugin;
     private final Logger logger;
+    private final ConfigService configService;
     private volatile Map<String, MenuIconDefinition> byId = Map.of();
 
     @Autowired
-    public MenuIconConfig(JavaPlugin plugin, Logger logger) {
+    public MenuIconConfig(JavaPlugin plugin,
+                          Logger logger,
+                          @Autowired(required = false) ConfigService configService) {
         this.plugin = plugin;
         this.logger = logger;
+        this.configService = configService;
     }
 
     @PostConstruct
@@ -51,6 +58,33 @@ public final class MenuIconConfig {
     }
 
     private Object loadRaw() {
+        Object starterResult = loadRawViaConfigService();
+        if (starterResult != null) {
+            return starterResult;
+        }
+        return loadRawViaLocalFile();
+    }
+
+    private Object loadRawViaConfigService() {
+        if (configService == null || !configService.isEnabled()) {
+            return null;
+        }
+        try {
+            configService.invalidate(CONFIG_FILE);
+            ConfigDocument document = configService.load(
+                    ConfigQuery.builder(CONFIG_FILE).plugin(plugin.getName()).build()
+            );
+            Object parsed = new Yaml().load(document.content());
+            return parsed == null ? List.of() : parsed;
+        } catch (RuntimeException ex) {
+            logger.log(Level.WARNING,
+                    "[FortuneTree] Failed to load " + CONFIG_FILE + " via ConfigService, fallback to local file.",
+                    ex);
+            return null;
+        }
+    }
+
+    private Object loadRawViaLocalFile() {
         File file = new File(plugin.getDataFolder(), CONFIG_FILE);
         if (!file.exists()) {
             plugin.getDataFolder().mkdirs();
@@ -114,4 +148,3 @@ public final class MenuIconConfig {
         return value == null ? "" : String.valueOf(value).trim();
     }
 }
-

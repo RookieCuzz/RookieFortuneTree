@@ -165,7 +165,7 @@ public class PersistentFortuneTreeStoreTest {
         AttemptState reloaded = store.getOrCreateAttempt(uuid, cycleId);
         assertEquals(2, reloaded.getUsedCount());
         assertEquals(2, redisQueryCount.get());
-        assertEquals(2, mybatisQueryCount.get());
+        assertEquals(1, mybatisQueryCount.get());
     }
 
     @Test

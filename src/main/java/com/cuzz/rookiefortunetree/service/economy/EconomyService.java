@@ -39,17 +39,18 @@ public final class EconomyService implements EconomyGateway {
     }
 
     @Override
-    public void give(Player player, int amount, String reason) {
+    public boolean give(Player player, int amount, String reason) {
         EconomyType type = config.economyType();
         if (type == EconomyType.PLAYERPOINTS) {
-            if (!playerPointsGateway.give(player, amount, reason) && playerPointsGateway.isAvailable()) {
+            boolean ok = playerPointsGateway.give(player, amount, reason);
+            if (!ok && playerPointsGateway.isAvailable()) {
                 logger.warning("[FortuneTree] PlayerPoints give operation returned false.");
             }
-            return;
+            return ok;
         }
         if (type == EconomyType.VAULT) {
             logger.warning("[FortuneTree] economy.type=vault is not implemented in this example, falling back to command mode.");
         }
-        commandGateway.give(player, amount, reason);
+        return commandGateway.give(player, amount, reason);
     }
 }

@@ -39,20 +39,20 @@ public final class RewardGenerator {
         Random random = new Random(seed);
         int total = randIntInclusive(random, minTotal, maxTotal);
 
-        boolean hasCrit = random.nextDouble() < clamp01(level.critChance());
-        int critCount = hasCrit ? 1 : 0;
+        int critCount = countCritBubbles(random, bubbleCount, clamp01(level.critChance()));
         int normalCount = bubbleCount - critCount;
-        if (normalCount <= 0) {
-            critCount = 0;
-            normalCount = bubbleCount;
-        }
 
         int critTotal = 0;
         if (critCount > 0) {
-            double share = randDouble(random, clamp01(level.critShareMin()), clamp01(level.critShareMax()));
-            int desired = (int) Math.round(total * share);
-            int maxAllowed = total - normalCount; // leave at least 1 for each normal bubble
-            critTotal = clampInt(desired, 1, Math.max(1, maxAllowed));
+            if (normalCount <= 0) {
+                critTotal = total;
+            } else {
+                double share = randDouble(random, clamp01(level.critShareMin()), clamp01(level.critShareMax()));
+                int desired = (int) Math.round(total * share);
+                int minAllowed = critCount; // each crit bubble must be >= 1
+                int maxAllowed = total - normalCount; // leave at least 1 for each normal bubble
+                critTotal = clampInt(desired, minAllowed, maxAllowed);
+            }
         }
         int normalTotal = total - critTotal;
 
@@ -144,5 +144,21 @@ public final class RewardGenerator {
             return 1.0;
         }
         return value;
+    }
+
+    private int countCritBubbles(Random random, int bubbleCount, double critChance) {
+        if (bubbleCount <= 0 || critChance <= 0.0) {
+            return 0;
+        }
+        if (critChance >= 1.0) {
+            return bubbleCount;
+        }
+        int count = 0;
+        for (int i = 0; i < bubbleCount; i++) {
+            if (random.nextDouble() < critChance) {
+                count++;
+            }
+        }
+        return count;
     }
 }
